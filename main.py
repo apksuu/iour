@@ -29,14 +29,21 @@ async def main():
 
     msg = messages[0]
     if msg.buttons:
-        print("✅ 发现按钮，尝试点击...")
-        result = await msg.click(0)
-        
-        # 捕获底层弹窗 (Toast)
-        if result and hasattr(result, 'message') and result.message:
-            print(f"🎈 弹窗文字: {result.message}")
-        else:
-            print("🎈 点击完成（无弹窗文字）。")
+        print("✅ 发现按钮面板，正在精准匹配“签到”按钮...")
+        try:
+            # 核心：自动匹配包含“签到”字样的按钮（比如“✅签到”）并点击
+            result = await msg.click(text='签到')
+            
+            # 核心：捕获并打印点击后的半透明弹窗 (Toast) 内容
+            if result and hasattr(result, 'message') and result.message:
+                print("====================================")
+                print(f"🎈 机器人弹窗成功捕获: 【{result.message}】")
+                print("====================================")
+            else:
+                print("🎈 点击已发送，但该机器人没有返回底层弹窗文字。")
+                
+        except Exception as e:
+            print(f"❌ 完蛋，点击失败！报错信息: {e}")
     else:
         print("❌ 消息中没有按钮")
 
