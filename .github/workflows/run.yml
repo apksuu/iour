@@ -2,10 +2,12 @@ name: Auto Sign Bot
 
 on:
   schedule:
-    # 这里的触发时间是 UTC 时间。
-    # 0 0 * * * 表示每天 UTC 时间 0点（北京时间/东八区早上 8 点，日本时间/东九区早上 9 点）执行
-    - cron: '0 0 * * *'
-  workflow_dispatch: # 允许你在网页上手动点击运行按钮进行测试
+    - cron: '0 0 * * *' # 每天北京时间早上 8 点执行
+  workflow_dispatch:
+
+# 核心：必须开启写权限，否则 Actions 没法提交代码
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -31,3 +33,12 @@ jobs:
           SESSION_STRING: ${{ secrets.SESSION_STRING }}
           BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
         run: python main.py
+
+      # 核心：自动提交变动到仓库
+      - name: Auto Commit
+        run: |
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Action"
+          git add last_run.txt
+          git commit -m "Update last run time" || echo "No changes to commit"
+          git push
