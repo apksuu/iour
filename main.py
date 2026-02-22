@@ -15,71 +15,97 @@ except KeyError as e:
     print(f"❌ 启动失败：缺少环境变量 {e}")
     sys.exit(1)
 
-# ================= 2. 机器人任务配置区 =================
-# 格式说明：('用户名', '指令', 等待它回复几条, 你要打印第几条)
-# ※ 打印说明：0 代表最底下（最新）的一条，1 代表往上一条。
+# ================= 2. 终极任务配置区 =================
+# 格式说明：
+# 1. 纯文字回复类：('用户名', '发什么指令', 'text', 需要等几条回复)
+# 2. 按钮点击类：  ('用户名', '发什么指令', 'button', '要点击的按钮文字')
 
-BOTS_TO_SIGN = [
-    # 第 1 个：从 Secrets 读取用户名，发 /qd，等 1 条，抓最新
-    (bot1_username, '/qd', 1, 0),               
+BOTS_CONFIG = [
+    # ---- 纯文字签到阵营 ----
+    (bot1_username, '/qd', 'text', 1),           # 第 1 个：环境变量读取
+    ('@aisgk1', '/sign', 'text', 2),             # 第 2 个：等 2 条回复
+    ('@JiuGuanABot', '/checkin', 'text', 1),     # 第 3 个：等 1 条回复
     
-    # 第 2 个：aisgk1，发 /sign，等 2 条消息，抓最新那条
-    ('@aisgk1', '/sign', 2, 0),
-    
-    # 第 3 个：酒馆机器人，发 /checkin，等 1 条消息，抓最新那条
-    ('@JiuGuanABot', '/checkin', 1, 0)
+    # ---- 按钮点击签到阵营 ----
+    ('@NaixiAccountBot', '/start', 'button', '✅签到') # 第 4 个：点按钮
 ]
 # ===================================================
 
 client = TelegramClient(StringSession(session_string), api_id, api_hash)
 
-async def sign_single_bot(bot_username, command, expected_msgs, fetch_index):
-    """封装单个机器人的签到逻辑"""
-    print(f"➡️ 正在向 {bot_username} 发送指令: {command}")
+async def handle_text_bot(bot_username, command, expected_msgs):
+    """处理纯文字回复的机器人"""
+    print(f"➡️ [纯文字模式] 向 {bot_username} 发送: {command}")
     try:
-        # 发送指令，并记录这条指令的消息 ID
         command_msg = await client.send_message(bot_username, command)
         
-        # 轮询等待（最长等待 8 秒）
         for _ in range(8):
             await asyncio.sleep(1)
-            # 抓取最新的 expected_msgs 条消息
             messages = await client.get_messages(bot_username, limit=expected_msgs)
             
-            # 核心黑科技：确保抓到的这几条消息，全都是在我们发送指令【之后】才产生的！
             if len(messages) >= expected_msgs and all(m.id > command_msg.id for m in messages):
-                print(f"✅ {bot_username} 成功回复：\n   {messages[fetch_index].text[:80]}...")
-                return True
+                print(f"✅ {bot_username} 成功回复：\n   {messages[0].text[:80]}...")
+                return
                 
-        print(f"⚠️ {bot_username} 超时，可能未发够 {expected_msgs} 条消息，已跳过。")
-        return False
-        
+        print(f"⚠️ {bot_username} 回复超时。")
     except Exception as e:
-        print(f"❌ 尝试联系 {bot_username} 时出错: {e}")
-        return False
+        print(f"❌ {bot_username} 任务出错: {e}")
+
+async def handle_button_bot(bot_username, command, button_text):
+    """处理需要点击按钮的机器人"""
+    print(f"➡️ [按键模式] 向 {bot_username} 发送唤醒指令: {command}")
+    try:
+        await client.send_message(bot_username, command)
+        await asyncio.sleep(5) # 给它 5 秒钟把面板弹出来
+        
+        messages = await client.get_messages(bot_username, limit=1)
+        if not messages or messages[0].out:
+            print(f"❌ {bot_username} 未回复面板。")
+            return
+            
+        msg = messages[0]
+        if msg.buttons:
+            print(f"🔍 发现面板，正在尝试点击【{button_text}】...")
+            result = await msg.click(text=button_text)
+            
+            toast = getattr(result, 'message', None) if result else None
+            if toast:
+                print(f"🎉 成功捕获弹窗：【{toast}】")
+            else:
+                print("🎈 点击动作已成功发送（该机器人无底层弹窗文字）。")
+        else:
+            print(f"❌ {bot_username} 回复了，但没有带按钮面板。")
+            
+    except Exception as e:
+        print(f"❌ {bot_username} 按钮点击出错: {e}")
 
 async def main():
     print("⏳ 正在建立 Telegram 安全连接...")
     await client.start()
     print("✅ 云端账号身份验证成功！\n")
     
-    print(f"🔍 任务开始：共有 {len(BOTS_TO_SIGN)} 个机器人需要处理...\n")
-    print("=" * 40)
+    print(f"🔍 任务开始：共有 {len(BOTS_CONFIG)} 个机器人的自动化任务...\n")
+    print("=" * 45)
     
-    for bot, cmd, expected, fetch_idx in BOTS_TO_SIGN:
-        if bot: 
-            await sign_single_bot(bot, cmd, expected, fetch_idx)
-            print("-" * 40)
+    # 挨个遍历处理所有机器人
+    for bot, cmd, mode, extra in BOTS_CONFIG:
+        if bot:
+            if mode == 'text':
+                await handle_text_bot(bot, cmd, extra)
+            elif mode == 'button':
+                await handle_button_bot(bot, cmd, extra)
+            
+            print("-" * 45)
             await asyncio.sleep(3) # 停顿 3 秒防风控
         else:
-            print(f"⚠️ 发现未配置真实用户名的任务 ({cmd})，已跳过。")
-            print("-" * 40)
+            print("⚠️ 发现空的任务配置，已跳过。")
+            print("-" * 45)
 
     # 生成运行记录
     print("\n📝 正在生成本地运行记录...")
     with open("last_run.txt", "w", encoding="utf-8") as f:
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        f.write(f"✅ {len(BOTS_TO_SIGN)} 个机器人的签到任务于 {now} 执行完毕")
+        f.write(f"✅ 包含 {len(BOTS_CONFIG)} 个机器人的混合签到任务于 {now} 执行完毕")
     print("✅ 记录已生成，准备交由 GitHub Actions 自动提交。")
 
 with client:
