@@ -23,7 +23,7 @@ BOTS_CONFIG = [
     ('@JiuGuanABot', '/checkin', 'text', 1),     
     
     # ---- 坐标盲点阵营 ----
-    # 'button_pos' 代表按坐标点击。 (0, 1) 代表第1排的第2个（也就是右上角）
+    # 'button_pos', (0, 1) 代表第0排的第1个（右上角）
     ('@NaixiAccountBot', '/start', 'button_pos', (0, 1)) 
 ]
 # ===================================================
@@ -57,25 +57,42 @@ async def handle_button_pos_bot(bot_username, command, pos):
             print(f"❌ {bot_username} 未回复面板。")
             return
             
-        msg = messages[0]
+        msg = messages[0] # 这个 msg 就是带按钮的那条面板消息
+        
         if msg.buttons:
             row, col = pos
             try:
-                # 直接锁定那个坐标的按钮！
                 target_button = msg.buttons[row][col]
                 print(f"🔍 锁定坐标 ({row}, {col}) 的按钮：【{target_button.text}】，正在精准点击...")
                 
+                # 🌟 执行点击！
                 result = await target_button.click()
                 
-                # 捕获弹窗
+                # ==== 捕获环节 1：检查有没有半透明弹窗 (比如“已经签到过了”) ====
                 toast = getattr(result, 'message', None) if result else None
                 if toast:
-                    print(f"🎉 成功捕获弹窗：【{toast}】")
-                else:
-                    print("🎈 坐标点击成功！（该机器人无底层弹窗文字）。")
-                    
+                    print(f"📢 捕获到底层弹窗：【{toast}】")
+                
+                # ==== 捕获环节 2：检查有没有下发新的文字消息 (比如“签到成功”) ====
+                print("⏳ 正在等待机器人的后续文字反馈...")
+                await asyncio.sleep(3) # 等待3秒让机器人把消息发出来
+                
+                # 往回看最新的2条消息
+                new_msgs = await client.get_messages(bot_username, limit=2)
+                found_new_text = False
+                
+                for m in new_msgs:
+                    # 如果这条消息是机器人发的，且它的ID大于那条按钮面板的ID，说明是点击之后的新消息！
+                    if not m.out and m.id > msg.id:
+                        print(f"📩 收到最新文字反馈：\n----------------\n{m.text[:150]}...\n----------------")
+                        found_new_text = True
+                        break # 找到了就跳出循环
+                        
+                if not toast and not found_new_text:
+                     print("🎈 坐标点击已完成，但机器人既没给弹窗，也没给新消息。")
+                     
             except IndexError:
-                print(f"❌ 找不到坐标为 ({row}, {col}) 的按钮！可能是排版变了，目前面板共有 {len(msg.buttons)} 排。")
+                print(f"❌ 找不到坐标为 ({row}, {col}) 的按钮！请检查坐标是否越界。")
         else:
             print(f"❌ {bot_username} 回复了，但没有带按钮面板。")
             
