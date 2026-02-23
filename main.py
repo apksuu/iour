@@ -20,7 +20,8 @@ BOTS_CONFIG = [
     # ---- 纯文字签到阵营 ----
     (bot1_username, '/qd', 'text', 1),           
     ('@aisgk1', '/sign', 'text', 2),             
-    ('@JiuGuanABot', '/checkin', 'text', 1),     
+    ('@JiuGuanABot', '/checkin', 'text', 1),
+    ('@iKuuuu_VPN_bot', '/checkin', 'text', 1),  # <--- 这是为你新增的第五个机器人
     
     # ---- 坐标盲点阵营 ----
     # 'button_pos', (0, 1) 代表第0排的第1个（右上角）
@@ -38,6 +39,7 @@ async def handle_text_bot(bot_username, command, expected_msgs):
         for _ in range(8):
             await asyncio.sleep(1)
             messages = await client.get_messages(bot_username, limit=expected_msgs)
+messages = await client.get_messages ( bot_username, limit=expected_msgs )  
             if len(messages) >= expected_msgs and all(m.id > command_msg.id for m in messages):
                 print(f"✅ {bot_username} 成功回复：\n   {messages[0].text[:80]}...")
                 return
