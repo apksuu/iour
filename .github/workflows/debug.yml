@@ -1,0 +1,15 @@
+name: 调试专用（远程连接）
+
+on:
+  workflow_dispatch:   # 手动点“Run workflow”才触发
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: 🚀 启动 tmate 远程连接
+      uses: mxschmitt/action-tmate@v3
+      with:
+        limit-access-to-actor: true   # 只允许你自己连
