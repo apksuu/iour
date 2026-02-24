@@ -1,19 +1,20 @@
-name: 星奈的调试小助手～（远程连接）
+name: 星奈的调试小助手～（纯 SSH）
 
 on:
-  workflow_dispatch:   # 手动点 Run workflow 哦～
+  workflow_dispatch:
 
 jobs:
   debug:
     runs-on: ubuntu-latest
-    timeout-minutes: 180   # 跑3小时够啦～
+    timeout-minutes: 180
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: 🚀 启动 tmate 远程连接
+    - name: 🚀 启动 tmate（纯 SSH 模式）
       uses: mxschmitt/action-tmate@v3
-      # 去掉限制，SSH 直接就能连～
+      with:
+        limit-access-to-actor: false   # 关键！完全开放
 
-    - name: 💤 保持会话一直开着
+    - name: 💤 保持开着
       run: sleep 10800
