@@ -1,20 +1,91 @@
-name: 星奈的调试小助手～（纯 SSH）
+name: Telegram Bot VM (5 Hours)
 
-on:
-  workflow_dispatch:
+on: 
+  workflow_dispatch: # 允许在 GitHub 网页上手动点击运行
 
 jobs:
-  debug:
+  run-vm:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
-
     steps:
-    - uses: actions/checkout@v4
+      - name: ⚙️ 设置 Python 环境
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-    - name: 🚀 启动 tmate（纯 SSH 模式）
-      uses: mxschmitt/action-tmate@v3
-      with:
-        limit-access-to-actor: false   # 关键！完全开放
+      - name: 📦 安装依赖库
+        run: pip install python-telegram-bot nest_asyncio
 
-    - name: 💤 保持开着
-      run: sleep 10800
+      - name: 🤖 启动 Telegram 控制机器人 (运行5小时)
+        run: |
+          cat << 'EOF' > bot.py
+          import asyncio
+          import subprocess
+          import sys
+          from telegram import Update
+          from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+
+          # 填入你提供的 Bot Token
+          TOKEN = '8310173625:AAGjhP7DOW-xpad6W5UUVNb0g0VC70D6ww4'
+
+          async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+              welcome_msg = (
+                  "✅ GitHub Actions 虚拟机已连接！\n"
+                  "现在您可以直接发送 Linux 命令 (例如 `ls -la`, `uname -a`, `curl ifconfig.me`)。\n"
+                  "我会帮您在虚拟机执行并返回结果。\n\n"
+                  "⏳ 计划运行时长：5小时\n"
+                  "🛑 输入 /stop 可随时提前关闭虚拟机。"
+              )
+              await update.message.reply_text(welcome_msg)
+
+          async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
+              await update.message.reply_text("🛑 收到关闭指令，正在销毁 GitHub Actions 虚拟机...")
+              sys.exit(0) # 退出 Python 脚本，GitHub Actions 任务也会随之结束
+
+          async def handle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+              cmd = update.message.text
+              try:
+                  # 在虚拟机中执行 Bash 命令
+                  process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                  stdout, stderr = process.communicate(timeout=60) # 设置单条命令超时时间为60秒
+                  
+                  output = stdout + stderr
+                  if not output.strip():
+                      output = "[命令执行成功，无输出]"
+                  
+                  # Telegram 单条消息最长 4096 字符，进行截断保护
+                  if len(output) > 4000:
+                      output = output[:4000] + "\n...[输出过长已截断]"
+                  
+                  await update.message.reply_text(f"💻 执⾏:\n{cmd}\n\n📄 结果:\n{output}")
+                  
+              except subprocess.TimeoutExpired:
+                  await update.message.reply_text("❌ 命令执行超时 (超过60秒被强制终止)")
+              except Exception as e:
+                  await update.message.reply_text(f"❌ 发生错误: {str(e)}")
+
+          async def main():
+              app = ApplicationBuilder().token(TOKEN).build()
+              
+              app.add_handler(CommandHandler("start", start))
+              app.add_handler(CommandHandler("stop", stop))
+              app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_command))
+              
+              print("Telegram Bot 启动成功，正在监听命令...")
+              await app.initialize()
+              await app.start()
+              await app.updater.start_polling()
+              
+              # 核心：让脚本保持运行 5 小时 (5小时 * 60分钟 * 60秒 = 18000秒)
+              await asyncio.sleep(18000)
+              
+              print("已达到 5 小时时长限制，准备关闭...")
+              await app.updater.stop()
+              await app.stop()
+              await app.shutdown()
+
+          if __name__ == '__main__':
+              asyncio.run(main())
+          EOF
+          
+          # 运行我们刚刚生成的 Python 脚本
+          python bot.py
