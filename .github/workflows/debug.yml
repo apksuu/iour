@@ -15,23 +15,24 @@ jobs:
       - name: 📦 安装依赖库
         run: pip install python-telegram-bot nest_asyncio
 
-      - name: 🤖 启动 Telegram 控制机器人 (运行5小时)
+      - name: 🤖 启动 Telegram 控制机器人 (带记忆功能)
         run: |
           cat << 'EOF' > bot.py
           import asyncio
           import subprocess
           import sys
+          import os
           from telegram import Update
           from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-          # 填入你提供的 Bot Token
+          # 你的 Bot Token (测试完建议去 @BotFather 重新生成并使用 GitHub Secrets 隐藏)
           TOKEN = '8310173625:AAGjhP7DOW-xpad6W5UUVNb0g0VC70D6ww4'
 
           async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
               welcome_msg = (
                   "✅ GitHub Actions 虚拟机已连接！\n"
-                  "现在您可以直接发送 Linux 命令 (例如 `ls -la`, `uname -a`, `curl ifconfig.me`)。\n"
-                  "我会帮您在虚拟机执行并返回结果。\n\n"
+                  "现在您可以直接发送 Linux 命令。\n"
+                  "💡 已经支持 `cd` 命令，我会记住您当前的目录状态！\n\n"
                   "⏳ 计划运行时长：5小时\n"
                   "🛑 输入 /stop 可随时提前关闭虚拟机。"
               )
@@ -42,11 +43,27 @@ jobs:
               sys.exit(0) # 退出 Python 脚本，GitHub Actions 任务也会随之结束
 
           async def handle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-              cmd = update.message.text
+              cmd = update.message.text.strip()
+              
+              # 【核心逻辑】：拦截并处理 cd 命令，让 Python 记住当前路径
+              if cmd.startswith("cd "):
+                  target_dir = cmd[3:].strip()
+                  try:
+                      # 改变 Python 运行时的当前工作目录
+                      os.chdir(target_dir)
+                      current_dir = os.getcwd()
+                      await update.message.reply_text(f"📁 目录已切换至:\n{current_dir}")
+                  except FileNotFoundError:
+                      await update.message.reply_text(f"❌ 找不到目录: {target_dir}")
+                  except Exception as e:
+                      await update.message.reply_text(f"❌ 切换目录失败: {str(e)}")
+                  return # cd 命令处理完毕，直接返回
+
+              # 处理其他常规命令
               try:
-                  # 在虚拟机中执行 Bash 命令
-                  process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                  stdout, stderr = process.communicate(timeout=60) # 设置单条命令超时时间为60秒
+                  # cwd=os.getcwd() 确保每次执行命令都在我们“记住”的目录下
+                  process = subprocess.Popen(cmd, shell=True, cwd=os.getcwd(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                  stdout, stderr = process.communicate(timeout=60) # 设置超时时间 60 秒
                   
                   output = stdout + stderr
                   if not output.strip():
@@ -75,7 +92,7 @@ jobs:
               await app.start()
               await app.updater.start_polling()
               
-              # 核心：让脚本保持运行 5 小时 (5小时 * 60分钟 * 60秒 = 18000秒)
+              # 保持运行 5 小时 (18000秒)
               await asyncio.sleep(18000)
               
               print("已达到 5 小时时长限制，准备关闭...")
@@ -87,5 +104,5 @@ jobs:
               asyncio.run(main())
           EOF
           
-          # 运行我们刚刚生成的 Python 脚本
+          # 运行生成的 Python 脚本
           python bot.py
